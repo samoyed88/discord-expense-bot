@@ -203,26 +203,52 @@ async def add_image_expense(
                 
                 await interaction.followup.send(embed=embed)
             else:
-                # Multiple items - detailed format
-                embed = discord.Embed(
-                    title=f"✅ AI識別成功（{len(results)} 筆）",
-                    color=discord.Color.green()
-                )
-                
+                # Multiple items - use table format or split into multiple embeds
                 total_amount = 0
-                for i, result_item in enumerate(results, 1):
-                    icon = categories_dict.get(result_item["category"], "💰")
-                    value = f"${result_item['amount']} | {result_item['date']}\n_{result_item['description']}_"
-                    embed.add_field(
-                        name=f"{i}. {icon} {result_item['category']}",
-                        value=value,
-                        inline=False
+                for item in results:
+                    total_amount += item["amount"]
+                
+                # Discord limit: max 25 fields per embed
+                # If > 25 items, split into multiple embeds
+                if len(results) > 25:
+                    # Format as text table for large number of items
+                    table_text = "```\n序號  | 金額    | 分類   | 日期       | 描述\n"
+                    table_text += "-" * 60 + "\n"
+                    
+                    for i, result_item in enumerate(results, 1):
+                        amount_str = f"${result_item['amount']:.2f}"
+                        desc_short = result_item["description"][:10] + ("..." if len(result_item["description"]) > 10 else "")
+                        table_text += f"{i:4} | {amount_str:7} | {result_item['category']:6} | {result_item['date']} | {desc_short}\n"
+                    
+                    table_text += "```"
+                    
+                    embed = discord.Embed(
+                        title=f"✅ AI識別成功（{len(results)} 筆）",
+                        color=discord.Color.green(),
+                        description=table_text
                     )
-                    total_amount += result_item["amount"]
-                
-                embed.set_footer(text=f"合計: ${total_amount:.2f} | 記錄 IDs: {', '.join(map(str, expense_ids))}")
-                
-                await interaction.followup.send(embed=embed)
+                    embed.set_footer(text=f"合計: ${total_amount:.2f} | 記錄 IDs: {', '.join(map(str, expense_ids))}")
+                    
+                    await interaction.followup.send(embed=embed)
+                else:
+                    # Multiple items (≤25) - detailed format with fields
+                    embed = discord.Embed(
+                        title=f"✅ AI識別成功（{len(results)} 筆）",
+                        color=discord.Color.green()
+                    )
+                    
+                    for i, result_item in enumerate(results, 1):
+                        icon = categories_dict.get(result_item["category"], "💰")
+                        value = f"${result_item['amount']} | {result_item['date']}\n_{result_item['description']}_"
+                        embed.add_field(
+                            name=f"{i}. {icon} {result_item['category']}",
+                            value=value,
+                            inline=False
+                        )
+                    
+                    embed.set_footer(text=f"合計: ${total_amount:.2f} | 記錄 IDs: {', '.join(map(str, expense_ids))}")
+                    
+                    await interaction.followup.send(embed=embed)
             
         finally:
             # Clean up temp file
