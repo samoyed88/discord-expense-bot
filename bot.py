@@ -153,6 +153,9 @@ async def add_image_expense(
             f.write(image_data)
         
         try:
+            # Send progress indicator
+            await interaction.followup.send("🔄 正在識別圖片中的支出項目，請稍候...")
+            
             # Extract info from image (using async to avoid blocking Discord)
             result = await gemini.extract_from_receipt_async(temp_path, custom_prompt=prompt)
             

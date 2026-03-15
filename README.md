@@ -159,6 +159,21 @@ https://discord.com/api/oauth2/authorize?client_id=YOUR_BOT_ID&permissions=2048&
 | `/delete` | expense_id | 刪除記錄 | `/delete expense_id:5` |
 | `/categories` | - | 查看分類列表 | `/categories` |
 
+### 🔄 AI 處理進度提示
+
+當你使用 `/add_image` 上傳收據時：
+
+1. **立即確認** - Bot 會顯示 ✅ 確認已收到你的請求
+2. **處理中提示** - Bot 會發送 `🔄 正在識別圖片中的支出項目，請稍候...`
+3. **結果返回** - AI 完成識別後，Bot 會發送結果
+
+> **⏱️ 等待時間**
+> - 小圖片（< 1MB）：通常 3-8 秒
+> - 中等圖片（1-5MB）：通常 8-15 秒  
+> - 大圖片（> 5MB）：可能 15-30 秒
+>
+> 如果等待超過 15 分鐘，可能是 API 超時，請重試
+
 ### 使用範例
 
 #### 📝 文字記帳
