@@ -50,7 +50,7 @@ class TestGeminiClient:
         """Test parsing invalid JSON."""
         response = "This is not valid JSON at all"
         
-        with pytest.raises(ValueError, match="No JSON found"):
+        with pytest.raises(ValueError, match="No valid JSON found"):
             gemini_client._parse_json_response(response)
 
     def test_parse_json_response_missing_field(self, gemini_client):
