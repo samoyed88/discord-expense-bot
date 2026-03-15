@@ -13,11 +13,13 @@
 
 ## 🛠️ 技術棧
 
-- **語言**: Python 3.14+
-- **Discord 框架**: discord.py 2.7.1
-- **數據庫**: SQLite3
-- **AI 服務**: Google Gemini 2.0 Flash
-- **測試框架**: pytest (29個測試，100% 通過)
+| 項目 | 詳情 |
+|------|------|
+| **模型** | gemini-1.5-flash（穩定版） |
+| **框架** | discord.py 2.7.1 |
+| **數據庫** | SQLite3 |
+| **非阻塞** | ✅ 異步 API 調用 |
+| **功能** | 文字記帳、圖片識別（含多筆）、月度統計 |
 
 ## 📋 快速開始
 
@@ -321,6 +323,26 @@ id | name | icon
 | `DISCORD_TOKEN` | ✅ | Discord Bot Token | `MTA4MzMwNDA4NzYx...` |
 | `GEMINI_API_KEY` | ✅ | Google Gemini API Key | `AIzaSyB...` |
 | `DATABASE_NAME` | ❌ | 數據庫檔案名 | `expenses.db` |
+
+### Gemini API 模型選擇
+
+當前使用 **gemini-1.5-flash**（推薦穩定版本）
+
+**支持的模型：**
+```python
+# 穩定版本（推薦）
+model_name = "gemini-1.5-flash"        # 快速、穩定、成本低
+model_name = "gemini-1.5-pro"          # 更強大、更準確（成本較高）
+
+# 實驗性版本（謹慎使用）
+model_name = "gemini-2.0-flash"        # 較新版本
+model_name = "gemini-3-flash-preview"  # 預覽版（可能不穩定）
+```
+
+修改 bot.py 初始化代碼來切換模型：
+```python
+gemini = GeminiClient(model_name="gemini-1.5-pro")  # 使用 Pro 版本
+```
 
 ## 🐛 常見問題
 
