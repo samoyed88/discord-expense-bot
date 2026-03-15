@@ -123,7 +123,7 @@ class TestGeminiClient:
         
         is_valid, error = gemini_client.validate_result(result)
         assert is_valid is False
-        assert "positive number" in error
+        assert "negative" in error.lower() or "positive" in error.lower()
 
     def test_validate_result_invalid_date(self, gemini_client):
         """Test validation with invalid date."""

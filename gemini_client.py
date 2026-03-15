@@ -10,12 +10,12 @@ from pathlib import Path
 
 
 class GeminiClient:
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "gemini-3-flash-preview"):
         """Initialize Gemini client with API key.
         
         Args:
             api_key: Gemini API key (or use GEMINI_API_KEY env var)
-            model_name: Model to use (default: gemini-1.5-flash - more stable)
+            model_name: Model to use (default: gemini-3-flash-preview)
         """
         api_key = api_key or os.getenv("GEMINI_API_KEY")
         if not api_key:
@@ -51,9 +51,12 @@ class GeminiClient:
 如果有多筆：返回 JSON 陣列 []
 
 每筆包含：
-- amount: 金額（數字，例如 100.50）
+- amount: 金額（數字，只取正數，例如 100.50）
+  * 若識別到符號，只提取數字部分
+  * 若有多個數字，提取最大的或最相關的
+  * 必須是正數，不能是負數或零
 - date: 日期（格式 YYYY-MM-DD，如無法識別使用今天日期）
-- description: 商品或服務描述（簡短）
+- description: 商品或服務描述（簡短，避免重複）
 - category: 自動判斷分類（從以下選擇：食物、交通、娛樂、購物、工作、健康、其他）
 
 示例（單筆）：
@@ -65,7 +68,7 @@ class GeminiClient:
   {"amount": 30.0, "date": "2026-03-15", "description": "項目2", "category": "交通"}
 ]
 
-請只返回 JSON，不要有其他文字。"""
+重要：確保每個金額都是正數。請只返回 JSON，不要有其他文字。"""
         
         if custom_prompt:
             prompt += f"\n\n使用者提示：{custom_prompt}"
@@ -227,9 +230,19 @@ class GeminiClient:
             if field not in result:
                 return False, f"Missing field: {field}"
         
-        # Validate amount
-        if not isinstance(result["amount"], (int, float)) or result["amount"] <= 0:
-            return False, "Amount must be a positive number"
+        # Validate and normalize amount
+        try:
+            amount = float(result["amount"])
+            # 金額必須是正數，如果是負數則取絕對值（可能是 AI 錯誤）
+            if amount < 0:
+                # 嘗試自動修正：如果金額為負，可能是識別錯誤
+                # 但我們還是返回錯誤，讓用戶知道
+                return False, f"Amount is negative: {amount} (should be positive)"
+            if amount == 0:
+                return False, "Amount cannot be zero"
+            result["amount"] = amount
+        except (ValueError, TypeError):
+            return False, f"Invalid amount format: {result['amount']}"
         
         # Validate date format
         from datetime import datetime
