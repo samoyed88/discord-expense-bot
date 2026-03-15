@@ -170,12 +170,19 @@ class Database:
         return normalized.lower()
 
     def check_duplicate_expense(
-        self, user_id: int, description: str, date: str
+        self, user_id: int, description: str, date: str, amount: float = None
     ) -> Optional[dict]:
-        """Check if expense with same user_id, description, and date exists.
+        """Check if expense with same user_id, description, date, and amount exists.
         
         Uses normalized description for fuzzy matching to handle
         variations like "連加*停車大聲公" vs "停車大聲公"
+        
+        Only considers it a duplicate if:
+        1. Same user AND same date AND exact description AND same amount (if amount provided), OR
+        2. Same user AND same date AND fuzzy description match AND same amount
+        
+        This prevents different-amount transactions on same day/merchant
+        from being incorrectly marked as duplicates.
         """
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -195,7 +202,13 @@ class Database:
         )
         result = cursor.fetchone()
         
-        # Second try: fuzzy match on normalized descriptions
+        # If found with exact match, check amount if provided
+        if result and amount is not None:
+            # If amount doesn't match, this is not a duplicate
+            if abs(result[1] - amount) >= 0.01:
+                result = None
+        
+        # Second try: fuzzy match on normalized descriptions with amount check
         if not result:
             cursor.execute(
                 """
@@ -209,7 +222,11 @@ class Database:
             
             for row in all_expenses:
                 stored_desc = self._normalize_description(row[4])
-                if stored_desc == normalized_desc and stored_desc:  # Ensure not empty
+                # Fuzzy match: same normalized description AND same amount
+                if (stored_desc == normalized_desc and 
+                    stored_desc and  # Ensure not empty
+                    amount is not None and 
+                    abs(row[1] - amount) < 0.01):  # Same amount (float comparison)
                     result = row
                     break
         

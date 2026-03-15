@@ -93,9 +93,9 @@ async def add_expense(
                 await interaction.followup.send("❌ 日期格式錯誤，請使用 YYYY-MM-DD")
                 return
         
-        # Check for duplicate (same date and description)
+        # Check for duplicate (same date, description, and amount)
         desc = description or "N/A"
-        duplicate = db.check_duplicate_expense(user_id, desc, date)
+        duplicate = db.check_duplicate_expense(user_id, desc, date, amount)
         if duplicate:
             embed = discord.Embed(
                 title="⚠️ 記錄已存在",
@@ -198,7 +198,8 @@ async def add_image_expense(
                 duplicate = db.check_duplicate_expense(
                     user_id,
                     item["description"],
-                    item["date"]
+                    item["date"],
+                    item["amount"]
                 )
                 if duplicate:
                     duplicates.append({

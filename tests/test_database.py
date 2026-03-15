@@ -265,7 +265,8 @@ class TestDatabase:
         duplicate = test_db.check_duplicate_expense(
             user_id=user_id,
             description="停車大聲公",
-            date="2026-03-09"
+            date="2026-03-09",
+            amount=1.00
         )
         
         assert duplicate is not None
@@ -288,11 +289,35 @@ class TestDatabase:
         duplicate = test_db.check_duplicate_expense(
             user_id=user_id,
             description="連支*CityWash",
-            date="2026-02-27"
+            date="2026-02-27",
+            amount=60.00
         )
         
         assert duplicate is not None
         assert duplicate["id"] == expense_id
+
+    def test_check_duplicate_different_amount_not_duplicate(self, test_db):
+        """Test that same merchant/date with different amounts is NOT a duplicate."""
+        user_id = test_db.get_or_create_user(123456789, "TestUser")
+        
+        # Add first expense
+        expense1_id = test_db.add_expense(
+            user_id=user_id,
+            amount=60.00,
+            description="和雲行動服務 iRent 租車",
+            category="交通",
+            date="2026-02-28"
+        )
+        
+        # Check different amount on same date - should NOT be duplicate
+        duplicate = test_db.check_duplicate_expense(
+            user_id=user_id,
+            description="和雲行動服務 iRent 租車",
+            date="2026-02-28",
+            amount=93.00  # Different amount
+        )
+        
+        assert duplicate is None  # Should NOT find it as duplicate
 
 
 if __name__ == "__main__":
