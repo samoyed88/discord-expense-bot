@@ -15,7 +15,7 @@ class GeminiClient:
             raise ValueError("GEMINI_API_KEY environment variable not set")
         
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel("gemini-2.0-flash")
+        self.model = genai.GenerativeModel("gemini-3-flash-preview")
 
     def extract_from_receipt(self, image_path: str) -> Dict:
         """
