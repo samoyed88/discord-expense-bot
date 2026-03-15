@@ -1,0 +1,158 @@
+import pytest
+import os
+import sqlite3
+from datetime import datetime
+from database import Database
+
+
+@pytest.fixture
+def test_db():
+    """Create a test database."""
+    db_file = "test_expenses.db"
+    if os.path.exists(db_file):
+        os.remove(db_file)
+    
+    db = Database(db_file)
+    yield db
+    
+    # Cleanup
+    if os.path.exists(db_file):
+        os.remove(db_file)
+
+
+class TestDatabase:
+    def test_init_db(self, test_db):
+        """Test database initialization."""
+        conn = test_db.get_connection()
+        cursor = conn.cursor()
+        
+        # Check tables exist
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = {row[0] for row in cursor.fetchall()}
+        
+        assert "users" in tables
+        assert "expenses" in tables
+        assert "categories" in tables
+        conn.close()
+
+    def test_get_or_create_user(self, test_db):
+        """Test user creation and retrieval."""
+        user_id = test_db.get_or_create_user(123456789, "TestUser")
+        assert user_id > 0
+        
+        # Same user should return same ID
+        user_id2 = test_db.get_or_create_user(123456789, "TestUser")
+        assert user_id == user_id2
+
+    def test_add_expense(self, test_db):
+        """Test adding expense."""
+        user_id = test_db.get_or_create_user(123456789, "TestUser")
+        
+        expense_id = test_db.add_expense(
+            user_id=user_id,
+            amount=100.50,
+            description="Lunch",
+            category="食物",
+            date="2026-03-15"
+        )
+        
+        assert expense_id > 0
+        
+        # Verify expense was added
+        expenses = test_db.get_expenses(user_id)
+        assert len(expenses) == 1
+        assert expenses[0]["amount"] == 100.50
+        assert expenses[0]["description"] == "Lunch"
+
+    def test_get_expenses(self, test_db):
+        """Test fetching expenses."""
+        user_id = test_db.get_or_create_user(123456789, "TestUser")
+        
+        # Add multiple expenses
+        for i in range(5):
+            test_db.add_expense(
+                user_id=user_id,
+                amount=10.0 * (i + 1),
+                description=f"Item {i}",
+                category="食物",
+                date="2026-03-15"
+            )
+        
+        expenses = test_db.get_expenses(user_id, limit=10)
+        assert len(expenses) == 5
+
+    def test_delete_expense(self, test_db):
+        """Test deleting expense."""
+        user_id = test_db.get_or_create_user(123456789, "TestUser")
+        
+        expense_id = test_db.add_expense(
+            user_id=user_id,
+            amount=100.0,
+            description="Lunch",
+            category="食物",
+            date="2026-03-15"
+        )
+        
+        # Delete expense
+        deleted = test_db.delete_expense(expense_id, user_id)
+        assert deleted is True
+        
+        # Verify deletion
+        expenses = test_db.get_expenses(user_id)
+        assert len(expenses) == 0
+
+    def test_delete_expense_unauthorized(self, test_db):
+        """Test that users can't delete others' expenses."""
+        user_id1 = test_db.get_or_create_user(111111111, "User1")
+        user_id2 = test_db.get_or_create_user(222222222, "User2")
+        
+        expense_id = test_db.add_expense(
+            user_id=user_id1,
+            amount=100.0,
+            description="Lunch",
+            category="食物",
+            date="2026-03-15"
+        )
+        
+        # User2 tries to delete User1's expense
+        deleted = test_db.delete_expense(expense_id, user_id2)
+        assert deleted is False
+        
+        # Verify expense still exists
+        expenses = test_db.get_expenses(user_id1)
+        assert len(expenses) == 1
+
+    def test_monthly_stats(self, test_db):
+        """Test monthly statistics."""
+        user_id = test_db.get_or_create_user(123456789, "TestUser")
+        
+        # Add expenses in different categories
+        test_db.add_expense(user_id, 50.0, "Lunch", "食物", "2026-03-15")
+        test_db.add_expense(user_id, 30.0, "Dinner", "食物", "2026-03-16")
+        test_db.add_expense(user_id, 20.0, "Taxi", "交通", "2026-03-17")
+        
+        stats = test_db.get_monthly_stats(user_id, 2026, 3)
+        
+        assert stats["total"] == 100.0
+        assert "食物" in stats["by_category"]
+        assert stats["by_category"]["食物"]["total"] == 80.0
+        assert stats["by_category"]["食物"]["count"] == 2
+        assert stats["by_category"]["交通"]["total"] == 20.0
+
+    def test_get_categories(self, test_db):
+        """Test category retrieval."""
+        categories = test_db.get_categories()
+        
+        assert len(categories) > 0
+        category_names = {name for name, _ in categories}
+        assert "食物" in category_names
+        assert "交通" in category_names
+
+    def test_validate_category(self, test_db):
+        """Test category validation."""
+        assert test_db.validate_category("食物") is True
+        assert test_db.validate_category("NonExistent") is False
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
