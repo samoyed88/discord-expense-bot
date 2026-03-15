@@ -51,18 +51,32 @@ WARNING discord.gateway Shard ID None heartbeat blocked for more than 10 seconds
 
 ### 3. JSON 解析失敗
 
-**症狀：** `❌ 識別失敗：No JSON found in response`
+**症狀：** `❌ 出錯：Invalid JSON in response: Extra data: line 1 column 83`
 
 **原因：**
-- 圖片品質太低
-- 收據/發票內容不清楚
-- Gemini 無法識別
+- Gemini 返回了包含 JSON 和額外文字的混合響應
+- JSON 格式不完整或不符合標準
+- 正則表達式無法正確捕獲 JSON
 
 **解決方案：**
+
+✅ **改進的解析邏輯已實現**
+- 使用三層策略精確提取 JSON
+- 支持各種 Gemini 返回格式
+- 更詳細的錯誤信息幫助診斷
+
+✅ **如果仍有問題：**
 ```
-✅ 重新上傳更清晰的圖片
-✅ 使用提示詞幫助 AI：
-   /add_image [圖片] prompt:請仔細識別每個項目的金額
+1. 使用提示詞協助：
+   /add_image [圖片] prompt:返回格式必須是有效的 JSON
+
+2. 檢查圖片質量：
+   - 避免過度傾斜或模糊
+   - 確保文字清晰可辨
+
+3. 查看錯誤詳情：
+   - 錯誤信息會顯示實際 JSON 內容
+   - 幫助診斷具體問題
 ```
 
 ---
