@@ -3,23 +3,31 @@ import base64
 import json
 import re
 from typing import Optional, Dict, List
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import google.generativeai as genai
 from pathlib import Path
 
 
 class GeminiClient:
-    def __init__(self, api_key: Optional[str] = None):
-        """Initialize Gemini client with API key."""
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "gemini-1.5-flash"):
+        """Initialize Gemini client with API key.
+        
+        Args:
+            api_key: Gemini API key (or use GEMINI_API_KEY env var)
+            model_name: Model to use (default: gemini-1.5-flash - more stable)
+        """
         api_key = api_key or os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable not set")
         
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel("gemini-3-flash-preview")
+        self.model = genai.GenerativeModel(model_name)
+        self.executor = ThreadPoolExecutor(max_workers=2)  # Async API calls
 
     def extract_from_receipt(self, image_path: str, custom_prompt: Optional[str] = None) -> Dict | List[Dict]:
         """
-        Extract expense information from receipt/invoice image.
+        Extract expense information from receipt/invoice image (BLOCKING - use extract_from_receipt_async in async contexts).
         
         Args:
             image_path: Path to image file
@@ -73,6 +81,20 @@ class GeminiClient:
             return result
         except Exception as e:
             raise Exception(f"Failed to process image with Gemini: {str(e)}")
+    
+    async def extract_from_receipt_async(self, image_path: str, custom_prompt: Optional[str] = None) -> Dict | List[Dict]:
+        """
+        Extract expense information from receipt/invoice image (ASYNC - non-blocking).
+        
+        Use this in Discord bot commands to avoid blocking the event loop.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self.executor,
+            self.extract_from_receipt,
+            image_path,
+            custom_prompt
+        )
 
     def parse_expense_text(self, text: str) -> Dict:
         """

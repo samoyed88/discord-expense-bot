@@ -153,8 +153,8 @@ async def add_image_expense(
             f.write(image_data)
         
         try:
-            # Extract info from image
-            result = gemini.extract_from_receipt(temp_path, custom_prompt=prompt)
+            # Extract info from image (using async to avoid blocking Discord)
+            result = await gemini.extract_from_receipt_async(temp_path, custom_prompt=prompt)
             
             # Validate extraction
             is_valid, error = gemini.validate_result(result)
