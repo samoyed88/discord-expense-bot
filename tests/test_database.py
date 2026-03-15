@@ -233,6 +233,67 @@ class TestDatabase:
         
         assert duplicate is None
 
+    def test_normalize_description_prefixes(self, test_db):
+        """Test description normalization removes prefixes."""
+        # Test removing merchant prefixes
+        assert test_db._normalize_description("連加*停車大聲公") == "停車大聲公".lower()
+        assert test_db._normalize_description("連支*CityWash") == "citywash"
+        assert test_db._normalize_description("和雲行動服務 iRent") == "irent"
+        # foodpanda- prefix is removed, leaving just the food name
+        assert test_db._normalize_description("foodpanda-pizza") == "pizza"
+
+    def test_normalize_description_case_insensitive(self, test_db):
+        """Test that normalization is case insensitive."""
+        desc1 = "停車大聲公"
+        desc2 = "停車大聲公"
+        assert test_db._normalize_description(desc1) == test_db._normalize_description(desc2)
+
+    def test_check_duplicate_fuzzy_match(self, test_db):
+        """Test fuzzy matching with normalized descriptions."""
+        user_id = test_db.get_or_create_user(123456789, "TestUser")
+        
+        # Add expense with prefix
+        expense_id = test_db.add_expense(
+            user_id=user_id,
+            amount=1.00,
+            description="連加*停車大聲公",
+            category="交通",
+            date="2026-03-09"
+        )
+        
+        # Check for duplicate without prefix (should find it)
+        duplicate = test_db.check_duplicate_expense(
+            user_id=user_id,
+            description="停車大聲公",
+            date="2026-03-09"
+        )
+        
+        assert duplicate is not None
+        assert duplicate["id"] == expense_id
+
+    def test_check_duplicate_fuzzy_match_reverse(self, test_db):
+        """Test fuzzy matching in reverse (stored without prefix, new with prefix)."""
+        user_id = test_db.get_or_create_user(123456789, "TestUser")
+        
+        # Add expense without prefix
+        expense_id = test_db.add_expense(
+            user_id=user_id,
+            amount=60.00,
+            description="CityWash 洗車",
+            category="其他",
+            date="2026-02-27"
+        )
+        
+        # Check for duplicate with prefix (should find it)
+        duplicate = test_db.check_duplicate_expense(
+            user_id=user_id,
+            description="連支*CityWash",
+            date="2026-02-27"
+        )
+        
+        assert duplicate is not None
+        assert duplicate["id"] == expense_id
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

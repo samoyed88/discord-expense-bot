@@ -126,13 +126,64 @@ class Database:
         conn.close()
         return user_id
 
+    def _normalize_description(self, desc: str) -> str:
+        """Normalize description for deduplication.
+        
+        Remove common prefixes/suffixes and truncate to core text.
+        Examples:
+        - "連加*停車大聲公" -> "停車大聲公"
+        - "連支*CityWash" -> "CityWash"
+        - "和雲行動服務 iRent..." -> "iRent"
+        """
+        # Remove common merchant prefixes
+        prefixes = [
+            "連加*", "連支*", "和雲行動服務", "foodpanda-",
+            "富邦momo-EC", "MOMO-EC", "樂購蝦皮", "PCHOME",
+            "全家便利商店", "統一超商", "全國電子", "藍新*"
+        ]
+        
+        normalized = desc.strip()
+        
+        # Remove known prefixes
+        for prefix in prefixes:
+            if normalized.startswith(prefix):
+                normalized = normalized[len(prefix):].strip()
+                break
+        
+        # Remove common suffixes (store names, addresses)
+        # Keep only first meaningful part before hyphens/ellipsis
+        if " " in normalized:
+            # Take first part before space/dash
+            parts = normalized.split(" ")[0].split("-")[0]
+            if parts:
+                normalized = parts
+        elif "-" in normalized:
+            normalized = normalized.split("-")[0].strip()
+        
+        # Remove trailing ellipsis or truncate long descriptions
+        normalized = normalized.replace("...", "").strip()
+        
+        # Truncate to first 30 chars (core name)
+        if len(normalized) > 30:
+            normalized = normalized[:30].strip()
+        
+        return normalized.lower()
+
     def check_duplicate_expense(
         self, user_id: int, description: str, date: str
     ) -> Optional[dict]:
-        """Check if expense with same user_id, description, and date exists."""
+        """Check if expense with same user_id, description, and date exists.
+        
+        Uses normalized description for fuzzy matching to handle
+        variations like "連加*停車大聲公" vs "停車大聲公"
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
+        
+        # Normalize the input description
+        normalized_desc = self._normalize_description(description)
 
+        # First try: exact match on original description
         cursor.execute(
             """
             SELECT id, amount, category, created_at
@@ -143,6 +194,25 @@ class Database:
             (user_id, description, date),
         )
         result = cursor.fetchone()
+        
+        # Second try: fuzzy match on normalized descriptions
+        if not result:
+            cursor.execute(
+                """
+                SELECT id, amount, category, created_at, description
+                FROM expenses
+                WHERE user_id = ? AND date = ?
+                """,
+                (user_id, date),
+            )
+            all_expenses = cursor.fetchall()
+            
+            for row in all_expenses:
+                stored_desc = self._normalize_description(row[4])
+                if stored_desc == normalized_desc and stored_desc:  # Ensure not empty
+                    result = row
+                    break
+        
         conn.close()
         
         if result:
