@@ -7,6 +7,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import google.generativeai as genai
 from pathlib import Path
+from datetime import datetime
 
 
 class GeminiClient:
@@ -138,7 +139,8 @@ class GeminiClient:
             raise Exception(f"Failed to parse text with Gemini: {str(e)}")
 
     def _read_image(self, image_path: str) -> Dict:
-        """Read and encode image file."""
+        """Read and encode image file (cross-platform)."""
+        image_path = str(Path(image_path))  # Normalize path for current OS
         with open(image_path, "rb") as image_file:
             image_data = base64.standard_b64encode(image_file.read()).decode("utf-8")
         
@@ -289,7 +291,6 @@ class GeminiClient:
             return False, f"Invalid amount format: {result['amount']}"
         
         # Validate date format
-        from datetime import datetime
         try:
             datetime.strptime(result["date"], "%Y-%m-%d")
         except ValueError:

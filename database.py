@@ -1,10 +1,12 @@
 import sqlite3
 import os
+from pathlib import Path
 from datetime import datetime
 from typing import List, Optional, Tuple
 from dataclasses import dataclass
 
-DATABASE_NAME = "expenses.db"
+# Cross-platform database path
+DATABASE_NAME = str(Path(__file__).parent / "expenses.db")
 
 
 @dataclass

@@ -1,6 +1,7 @@
 # Discord Expense Bot Configuration
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -12,8 +13,8 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 # Gemini API Key
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Database
-DATABASE_NAME = os.getenv("DATABASE_NAME", "expenses.db")
+# Database - Cross-platform path
+DATABASE_NAME = os.getenv("DATABASE_NAME", str(Path(__file__).parent / "expenses.db"))
 
 # Bot configuration
 BOT_PREFIX = "/"

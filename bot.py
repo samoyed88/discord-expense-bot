@@ -1,10 +1,12 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 import discord
 from discord import app_commands
 from discord.ext import commands
 from datetime import datetime
 import io
+import tempfile
 
 from database import Database
 from gemini_client import GeminiClient
@@ -164,9 +166,10 @@ async def add_image_expense(
         
         # Download image
         image_data = await image.read()
-        temp_path = f"/tmp/{image.filename}"
-        with open(temp_path, "wb") as f:
-            f.write(image_data)
+        # Use cross-platform temp directory
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(image.filename).suffix) as tmp_file:
+            temp_path = tmp_file.name
+            tmp_file.write(image_data)
         
         try:
             # Send progress indicator
