@@ -212,3 +212,75 @@ class TestGeminiClient:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestMultipleExpenses:
+    """Test multiple expense extraction from single image."""
+    
+    def test_parse_multiple_expenses(self, gemini_client):
+        """Test parsing multiple expenses from response."""
+        response = '''
+        [
+            {
+                "amount": 50.0,
+                "date": "2026-03-15",
+                "description": "項目1",
+                "category": "食物"
+            },
+            {
+                "amount": 30.0,
+                "date": "2026-03-15",
+                "description": "項目2",
+                "category": "交通"
+            }
+        ]
+        '''
+        
+        result = gemini_client._parse_json_response(response)
+        
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0]["amount"] == 50.0
+        assert result[1]["amount"] == 30.0
+
+    def test_validate_multiple_expenses(self, gemini_client):
+        """Test validation of multiple expenses."""
+        results = [
+            {
+                "amount": 100.50,
+                "date": "2026-03-15",
+                "description": "午餐",
+                "category": "食物"
+            },
+            {
+                "amount": 50.0,
+                "date": "2026-03-15",
+                "description": "車費",
+                "category": "交通"
+            }
+        ]
+        
+        is_valid, error = gemini_client.validate_result(results)
+        assert is_valid is True
+        assert error == ""
+
+    def test_validate_multiple_with_invalid(self, gemini_client):
+        """Test validation fails for invalid item in list."""
+        results = [
+            {
+                "amount": 100.50,
+                "date": "2026-03-15",
+                "description": "午餐",
+                "category": "食物"
+            },
+            {
+                "amount": -50.0,
+                "date": "2026-03-15",
+                "description": "車費",
+                "category": "交通"
+            }
+        ]
+        
+        is_valid, error = gemini_client.validate_result(results)
+        assert is_valid is False
+        assert "negative" in error.lower() or "positive" in error.lower()

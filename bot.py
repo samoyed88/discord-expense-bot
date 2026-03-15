@@ -124,11 +124,13 @@ async def add_expense(
 
 @bot.tree.command(name="add_image", description="記錄支出（圖片識別）")
 @app_commands.describe(
-    image="上傳收據或發票圖片"
+    image="上傳收據或發票圖片",
+    prompt="額外提示詞（可選，幫助AI識別）"
 )
 async def add_image_expense(
     interaction: discord.Interaction,
-    image: discord.Attachment
+    image: discord.Attachment,
+    prompt: str = None
 ):
     """Add expense from receipt/invoice image."""
     await interaction.response.defer()
@@ -152,7 +154,7 @@ async def add_image_expense(
         
         try:
             # Extract info from image
-            result = gemini.extract_from_receipt(temp_path)
+            result = gemini.extract_from_receipt(temp_path, custom_prompt=prompt)
             
             # Validate extraction
             is_valid, error = gemini.validate_result(result)
@@ -166,30 +168,61 @@ async def add_image_expense(
                 interaction.user.name
             )
             
-            # Add expense
-            expense_id = db.add_expense(
-                user_id=user_id,
-                amount=result["amount"],
-                description=result["description"],
-                category=result["category"],
-                date=result["date"]
-            )
+            # Handle both single dict and list of dicts
+            results = result if isinstance(result, list) else [result]
+            
+            # Add expenses to database
+            expense_ids = []
+            for item in results:
+                expense_id = db.add_expense(
+                    user_id=user_id,
+                    amount=item["amount"],
+                    description=item["description"],
+                    category=item["category"],
+                    date=item["date"]
+                )
+                expense_ids.append(expense_id)
             
             # Format response
             categories_dict = {name: icon for name, icon in db.get_categories()}
-            icon = categories_dict.get(result["category"], "💰")
             
-            embed = discord.Embed(
-                title="✅ AI識別成功",
-                color=discord.Color.green()
-            )
-            embed.add_field(name="金額", value=f"${result['amount']}", inline=True)
-            embed.add_field(name="分類", value=f"{icon} {result['category']}", inline=True)
-            embed.add_field(name="日期", value=result["date"], inline=True)
-            embed.add_field(name="描述", value=result["description"], inline=False)
-            embed.set_footer(text=f"記錄 ID: {expense_id}")
-            
-            await interaction.followup.send(embed=embed)
+            if len(results) == 1:
+                # Single item - simple format
+                result_item = results[0]
+                icon = categories_dict.get(result_item["category"], "💰")
+                
+                embed = discord.Embed(
+                    title="✅ AI識別成功",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="金額", value=f"${result_item['amount']}", inline=True)
+                embed.add_field(name="分類", value=f"{icon} {result_item['category']}", inline=True)
+                embed.add_field(name="日期", value=result_item["date"], inline=True)
+                embed.add_field(name="描述", value=result_item["description"], inline=False)
+                embed.set_footer(text=f"記錄 ID: {expense_ids[0]}")
+                
+                await interaction.followup.send(embed=embed)
+            else:
+                # Multiple items - detailed format
+                embed = discord.Embed(
+                    title=f"✅ AI識別成功（{len(results)} 筆）",
+                    color=discord.Color.green()
+                )
+                
+                total_amount = 0
+                for i, result_item in enumerate(results, 1):
+                    icon = categories_dict.get(result_item["category"], "💰")
+                    value = f"${result_item['amount']} | {result_item['date']}\n_{result_item['description']}_"
+                    embed.add_field(
+                        name=f"{i}. {icon} {result_item['category']}",
+                        value=value,
+                        inline=False
+                    )
+                    total_amount += result_item["amount"]
+                
+                embed.set_footer(text=f"合計: ${total_amount:.2f} | 記錄 IDs: {', '.join(map(str, expense_ids))}")
+                
+                await interaction.followup.send(embed=embed)
             
         finally:
             # Clean up temp file

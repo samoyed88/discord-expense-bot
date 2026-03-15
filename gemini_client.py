@@ -2,7 +2,7 @@ import os
 import base64
 import json
 import re
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import google.generativeai as genai
 from pathlib import Path
 
@@ -17,15 +17,17 @@ class GeminiClient:
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel("gemini-3-flash-preview")
 
-    def extract_from_receipt(self, image_path: str) -> Dict:
+    def extract_from_receipt(self, image_path: str, custom_prompt: Optional[str] = None) -> Dict | List[Dict]:
         """
         Extract expense information from receipt/invoice image.
         
         Args:
             image_path: Path to image file
+            custom_prompt: Optional custom instruction to help AI
             
         Returns:
             Dict with keys: amount, date, description, category
+            OR List[Dict] if multiple items detected
         """
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Image file not found: {image_path}")
@@ -34,17 +36,32 @@ class GeminiClient:
         image_data = self._read_image(image_path)
         
         prompt = """
-分析這張收據或發票圖片，請提取以下信息並以 JSON 格式返回：
+分析這張收據或發票圖片。如果有多筆交易，請全部提取。
+請提取以下信息並以 JSON 格式返回：
+
+如果只有一筆：返回單個 JSON 對象
+如果有多筆：返回 JSON 陣列 []
+
+每筆包含：
 - amount: 金額（數字，例如 100.50）
 - date: 日期（格式 YYYY-MM-DD，如無法識別使用今天日期）
 - description: 商品或服務描述（簡短）
 - category: 自動判斷分類（從以下選擇：食物、交通、娛樂、購物、工作、健康、其他）
 
-請只返回 JSON 對象，不要有其他文字。
-示例格式：
+示例（單筆）：
 {"amount": 100.50, "date": "2026-03-15", "description": "午餐", "category": "食物"}
-"""
 
+示例（多筆）：
+[
+  {"amount": 50.0, "date": "2026-03-15", "description": "項目1", "category": "食物"},
+  {"amount": 30.0, "date": "2026-03-15", "description": "項目2", "category": "交通"}
+]
+
+請只返回 JSON，不要有其他文字。"""
+        
+        if custom_prompt:
+            prompt += f"\n\n使用者提示：{custom_prompt}"
+        
         try:
             response = self.model.generate_content([
                 prompt,
@@ -110,10 +127,10 @@ class GeminiClient:
             "data": image_data
         }
 
-    def _parse_json_response(self, response_text: str) -> Dict:
+    def _parse_json_response(self, response_text: str) -> Dict | List[Dict]:
         """Extract and parse JSON from response text."""
         # Try to find JSON in the response
-        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        json_match = re.search(r'\[.*\]|\{.*\}', response_text, re.DOTALL)
         
         if not json_match:
             raise ValueError(f"No JSON found in response: {response_text}")
@@ -125,7 +142,22 @@ class GeminiClient:
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON in response: {str(e)}")
         
-        # Validate required fields
+        # Handle both single dict and list of dicts
+        if isinstance(result, list):
+            # Validate each item
+            for item in result:
+                self._validate_single_result(item)
+        else:
+            # Single dict
+            self._validate_single_result(result)
+        
+        return result
+    
+    def _validate_single_result(self, result: Dict) -> None:
+        """Validate a single expense result."""
+        if not isinstance(result, dict):
+            raise ValueError("Result item is not a dictionary")
+        
         required_fields = ["amount", "date", "description", "category"]
         for field in required_fields:
             if field not in result:
@@ -141,16 +173,30 @@ class GeminiClient:
         valid_categories = ["食物", "交通", "娛樂", "購物", "工作", "健康", "其他"]
         if result["category"] not in valid_categories:
             result["category"] = "其他"  # Default to others
-        
-        return result
 
-    def validate_result(self, result: Dict) -> tuple[bool, str]:
+    def validate_result(self, result: Dict | List[Dict]) -> tuple[bool, str]:
         """
         Validate extracted result.
         
         Returns:
             (is_valid, error_message)
         """
+        if isinstance(result, list):
+            # Validate each item in list
+            if not result:
+                return False, "Empty result list"
+            
+            for i, item in enumerate(result):
+                is_valid, error = self._validate_single_dict(item)
+                if not is_valid:
+                    return False, f"Item {i+1}: {error}"
+            return True, ""
+        else:
+            # Single dict
+            return self._validate_single_dict(result)
+    
+    def _validate_single_dict(self, result: Dict) -> tuple[bool, str]:
+        """Validate a single expense dict."""
         if not isinstance(result, dict):
             return False, "Result is not a dictionary"
         
