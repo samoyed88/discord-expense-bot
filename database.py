@@ -126,6 +126,34 @@ class Database:
         conn.close()
         return user_id
 
+    def check_duplicate_expense(
+        self, user_id: int, description: str, date: str
+    ) -> Optional[dict]:
+        """Check if expense with same user_id, description, and date exists."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT id, amount, category, created_at
+            FROM expenses
+            WHERE user_id = ? AND description = ? AND date = ?
+            LIMIT 1
+            """,
+            (user_id, description, date),
+        )
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return {
+                "id": result[0],
+                "amount": result[1],
+                "category": result[2],
+                "created_at": result[3],
+            }
+        return None
+
     def add_expense(
         self, user_id: int, amount: float, description: str, category: str, date: str
     ) -> int:

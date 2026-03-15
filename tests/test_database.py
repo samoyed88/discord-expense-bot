@@ -153,6 +153,86 @@ class TestDatabase:
         assert test_db.validate_category("食物") is True
         assert test_db.validate_category("NonExistent") is False
 
+    def test_check_duplicate_expense_not_found(self, test_db):
+        """Test checking for non-existent duplicate."""
+        user_id = test_db.get_or_create_user(123456789, "TestUser")
+        
+        duplicate = test_db.check_duplicate_expense(
+            user_id=user_id,
+            description="Lunch",
+            date="2026-03-15"
+        )
+        
+        assert duplicate is None
+
+    def test_check_duplicate_expense_found(self, test_db):
+        """Test checking for existing duplicate."""
+        user_id = test_db.get_or_create_user(123456789, "TestUser")
+        
+        # Add first expense
+        expense_id = test_db.add_expense(
+            user_id=user_id,
+            amount=100.50,
+            description="Lunch",
+            category="食物",
+            date="2026-03-15"
+        )
+        
+        # Check for duplicate
+        duplicate = test_db.check_duplicate_expense(
+            user_id=user_id,
+            description="Lunch",
+            date="2026-03-15"
+        )
+        
+        assert duplicate is not None
+        assert duplicate["id"] == expense_id
+        assert duplicate["amount"] == 100.50
+
+    def test_check_duplicate_different_date(self, test_db):
+        """Test that different dates are not duplicates."""
+        user_id = test_db.get_or_create_user(123456789, "TestUser")
+        
+        # Add first expense
+        test_db.add_expense(
+            user_id=user_id,
+            amount=100.50,
+            description="Lunch",
+            category="食物",
+            date="2026-03-15"
+        )
+        
+        # Check for duplicate with different date
+        duplicate = test_db.check_duplicate_expense(
+            user_id=user_id,
+            description="Lunch",
+            date="2026-03-16"
+        )
+        
+        assert duplicate is None
+
+    def test_check_duplicate_different_description(self, test_db):
+        """Test that different descriptions are not duplicates."""
+        user_id = test_db.get_or_create_user(123456789, "TestUser")
+        
+        # Add first expense
+        test_db.add_expense(
+            user_id=user_id,
+            amount=100.50,
+            description="Lunch",
+            category="食物",
+            date="2026-03-15"
+        )
+        
+        # Check for duplicate with different description
+        duplicate = test_db.check_duplicate_expense(
+            user_id=user_id,
+            description="Dinner",
+            date="2026-03-15"
+        )
+        
+        assert duplicate is None
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

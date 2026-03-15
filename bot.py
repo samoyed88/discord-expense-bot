@@ -93,11 +93,27 @@ async def add_expense(
                 await interaction.followup.send("❌ 日期格式錯誤，請使用 YYYY-MM-DD")
                 return
         
+        # Check for duplicate (same date and description)
+        desc = description or "N/A"
+        duplicate = db.check_duplicate_expense(user_id, desc, date)
+        if duplicate:
+            embed = discord.Embed(
+                title="⚠️ 記錄已存在",
+                color=discord.Color.orange(),
+                description="相同日期和內容的記錄已存在，不會重複新增"
+            )
+            embed.add_field(name="金額", value=f"${duplicate['amount']}", inline=True)
+            embed.add_field(name="日期", value=date, inline=True)
+            embed.add_field(name="描述", value=desc, inline=False)
+            embed.set_footer(text=f"現有記錄 ID: {duplicate['id']}")
+            await interaction.followup.send(embed=embed)
+            return
+        
         # Add expense
         expense_id = db.add_expense(
             user_id=user_id,
             amount=amount,
-            description=description or "N/A",
+            description=desc,
             category=category,
             date=date
         )
@@ -174,17 +190,31 @@ async def add_image_expense(
             # Handle both single dict and list of dicts
             results = result if isinstance(result, list) else [result]
             
-            # Add expenses to database
+            # Add expenses to database with deduplication
             expense_ids = []
+            duplicates = []
             for item in results:
-                expense_id = db.add_expense(
-                    user_id=user_id,
-                    amount=item["amount"],
-                    description=item["description"],
-                    category=item["category"],
-                    date=item["date"]
+                # Check for duplicate
+                duplicate = db.check_duplicate_expense(
+                    user_id,
+                    item["description"],
+                    item["date"]
                 )
-                expense_ids.append(expense_id)
+                if duplicate:
+                    duplicates.append({
+                        "item": item,
+                        "existing_id": duplicate["id"],
+                        "existing_amount": duplicate["amount"]
+                    })
+                else:
+                    expense_id = db.add_expense(
+                        user_id=user_id,
+                        amount=item["amount"],
+                        description=item["description"],
+                        category=item["category"],
+                        date=item["date"]
+                    )
+                    expense_ids.append(expense_id)
             
             # Format response
             categories_dict = {name: icon for name, icon in db.get_categories()}
@@ -194,62 +224,105 @@ async def add_image_expense(
                 result_item = results[0]
                 icon = categories_dict.get(result_item["category"], "💰")
                 
-                embed = discord.Embed(
-                    title="✅ AI識別成功",
-                    color=discord.Color.green()
-                )
-                embed.add_field(name="金額", value=f"${result_item['amount']}", inline=True)
-                embed.add_field(name="分類", value=f"{icon} {result_item['category']}", inline=True)
-                embed.add_field(name="日期", value=result_item["date"], inline=True)
-                embed.add_field(name="描述", value=result_item["description"], inline=False)
-                embed.set_footer(text=f"記錄 ID: {expense_ids[0]}")
+                if duplicates and len(duplicates) == 1:
+                    # Duplicate case
+                    embed = discord.Embed(
+                        title="⚠️ 記錄已存在",
+                        color=discord.Color.orange(),
+                        description="相同日期和內容的記錄已存在，不會重複新增"
+                    )
+                    embed.add_field(name="金額", value=f"${result_item['amount']}", inline=True)
+                    embed.add_field(name="分類", value=f"{icon} {result_item['category']}", inline=True)
+                    embed.add_field(name="日期", value=result_item["date"], inline=True)
+                    embed.add_field(name="描述", value=result_item["description"], inline=False)
+                    embed.set_footer(text=f"現有記錄 ID: {duplicates[0]['existing_id']}")
+                else:
+                    # New record
+                    embed = discord.Embed(
+                        title="✅ AI識別成功",
+                        color=discord.Color.green()
+                    )
+                    embed.add_field(name="金額", value=f"${result_item['amount']}", inline=True)
+                    embed.add_field(name="分類", value=f"{icon} {result_item['category']}", inline=True)
+                    embed.add_field(name="日期", value=result_item["date"], inline=True)
+                    embed.add_field(name="描述", value=result_item["description"], inline=False)
+                    embed.set_footer(text=f"記錄 ID: {expense_ids[0]}")
                 
                 await interaction.followup.send(embed=embed)
             else:
                 # Multiple items - use table format or split into multiple embeds
                 total_amount = 0
+                added_count = len(expense_ids)
+                duplicated_count = len(duplicates)
+                
                 for item in results:
                     total_amount += item["amount"]
+                
+                # Create summary message if there are duplicates
+                if duplicates:
+                    summary_msg = f"✅ 新增 {added_count} 筆 | ⚠️ 重複 {duplicated_count} 筆"
+                else:
+                    summary_msg = f"✅ AI識別成功（{len(results)} 筆）"
                 
                 # Discord limit: max 25 fields per embed
                 # If > 25 items, split into multiple embeds
                 if len(results) > 25:
                     # Format as text table for large number of items
-                    table_text = "```\n序號  | 金額    | 分類   | 日期       | 描述\n"
-                    table_text += "-" * 60 + "\n"
+                    table_text = "```\n序號  | 狀態  | 金額    | 分類   | 日期       | 描述\n"
+                    table_text += "-" * 70 + "\n"
                     
                     for i, result_item in enumerate(results, 1):
                         amount_str = f"${result_item['amount']:.2f}"
                         desc_short = result_item["description"][:10] + ("..." if len(result_item["description"]) > 10 else "")
-                        table_text += f"{i:4} | {amount_str:7} | {result_item['category']:6} | {result_item['date']} | {desc_short}\n"
+                        
+                        # Check if this item is duplicated
+                        is_dup = any(dup["item"]["description"] == result_item["description"] and 
+                                    dup["item"]["date"] == result_item["date"] for dup in duplicates)
+                        status = "重複" if is_dup else "新增"
+                        
+                        table_text += f"{i:4} | {status:4} | {amount_str:7} | {result_item['category']:6} | {result_item['date']} | {desc_short}\n"
                     
                     table_text += "```"
                     
                     embed = discord.Embed(
-                        title=f"✅ AI識別成功（{len(results)} 筆）",
-                        color=discord.Color.green(),
+                        title=summary_msg,
+                        color=discord.Color.green() if not duplicates else discord.Color.orange(),
                         description=table_text
                     )
-                    embed.set_footer(text=f"合計: ${total_amount:.2f} | 記錄 IDs: {', '.join(map(str, expense_ids))}")
+                    
+                    footer_text = f"合計: ${total_amount:.2f}"
+                    if expense_ids:
+                        footer_text += f" | 新增 IDs: {', '.join(map(str, expense_ids))}"
+                    embed.set_footer(text=footer_text)
                     
                     await interaction.followup.send(embed=embed)
                 else:
                     # Multiple items (≤25) - detailed format with fields
+                    color = discord.Color.orange() if duplicates else discord.Color.green()
                     embed = discord.Embed(
-                        title=f"✅ AI識別成功（{len(results)} 筆）",
-                        color=discord.Color.green()
+                        title=summary_msg,
+                        color=color
                     )
                     
                     for i, result_item in enumerate(results, 1):
                         icon = categories_dict.get(result_item["category"], "💰")
+                        
+                        # Check if this item is duplicated
+                        is_dup = any(dup["item"]["description"] == result_item["description"] and 
+                                    dup["item"]["date"] == result_item["date"] for dup in duplicates)
+                        
+                        status_icon = "⚠️" if is_dup else "✅"
                         value = f"${result_item['amount']} | {result_item['date']}\n_{result_item['description']}_"
                         embed.add_field(
-                            name=f"{i}. {icon} {result_item['category']}",
+                            name=f"{status_icon} {i}. {icon} {result_item['category']}",
                             value=value,
                             inline=False
                         )
                     
-                    embed.set_footer(text=f"合計: ${total_amount:.2f} | 記錄 IDs: {', '.join(map(str, expense_ids))}")
+                    footer_text = f"合計: ${total_amount:.2f}"
+                    if expense_ids:
+                        footer_text += f" | 新增 IDs: {', '.join(map(str, expense_ids))}"
+                    embed.set_footer(text=footer_text)
                     
                     await interaction.followup.send(embed=embed)
             
