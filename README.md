@@ -15,7 +15,7 @@
 
 | 項目 | 詳情 |
 |------|------|
-| **模型** | gemini-1.5-flash（穩定版） |
+| **模型** | gemini-3-flash-preview（最新版） |
 | **框架** | discord.py 2.7.1 |
 | **數據庫** | SQLite3 |
 | **非阻塞** | ✅ 異步 API 調用 |
@@ -326,23 +326,23 @@ id | name | icon
 
 ### Gemini API 模型選擇
 
-當前使用 **gemini-1.5-flash**（推薦穩定版本）
+當前使用 **gemini-3-flash-preview**（推薦最新版本）
 
 **支持的模型：**
 ```python
-# 穩定版本（推薦）
-model_name = "gemini-1.5-flash"        # 快速、穩定、成本低
-model_name = "gemini-1.5-pro"          # 更強大、更準確（成本較高）
+# 最新版本（推薦）
+model_name = "gemini-3-flash-preview"   # 最新、最強大
 
-# 實驗性版本（謹慎使用）
-model_name = "gemini-2.0-flash"        # 較新版本
-model_name = "gemini-3-flash-preview"  # 預覽版（可能不穩定）
+# 備選穩定版本（如遇問題）
+model_name = "gemini-2.0-flash"         # 較舊但穩定
 ```
 
 修改 bot.py 初始化代碼來切換模型：
 ```python
-gemini = GeminiClient(model_name="gemini-1.5-pro")  # 使用 Pro 版本
+gemini = GeminiClient(model_name="gemini-2.0-flash")  # 使用 2.0 版本
 ```
+
+⚠️ **注意：** gemini-1.5-flash 已被下架，請勿使用
 
 ## 🐛 常見問題
 
