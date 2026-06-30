@@ -36,6 +36,7 @@ MANIFEST
 
 # Google Service Account key (NEVER commit this)
 service_account.json
+gen-lang-client-*.json
 *-credentials.json
 
 # IDE
