@@ -71,7 +71,12 @@ class SheetsClient:
             card if card else "",  # F: 卡號
         ]
 
-        self.sheet.append_row(row, value_input_option="USER_ENTERED")
+        # table_range="A3" 確保從第 3 行開始找最後一行，避免覆蓋
+        self.sheet.append_row(
+            row,
+            value_input_option="USER_ENTERED",
+            table_range="A3",
+        )
 
         # Return the row number (last row)
         return self.sheet.row_count
