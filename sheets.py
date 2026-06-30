@@ -47,10 +47,11 @@ class SheetsClient:
         jpy: Optional[float] = None,
         twd: Optional[float] = None,
         date: Optional[str] = None,
+        card: Optional[str] = None,
     ) -> int:
         """Append an expense row to the sheet.
 
-        Columns: B=日期, C=日幣, D=台幣, E=內容
+        Columns: B=日期, C=日幣, D=台幣, E=內容, F=卡號
         Row 1 = header, Row 2 = sum, data starts at row 3.
 
         Returns the row number that was written.
@@ -67,6 +68,7 @@ class SheetsClient:
             jpy if jpy else "",  # C: 日幣
             twd if twd else "",  # D: 台幣
             description,  # E: 內容
+            card if card else "",  # F: 卡號
         ]
 
         self.sheet.append_row(row, value_input_option="USER_ENTERED")
@@ -111,49 +113,3 @@ class SheetsClient:
         return date_str
 
 
-def parse_expense_message(text: str) -> Optional[dict]:
-    """Parse a quick expense message.
-
-    Supported formats:
-        午餐 1500 日幣
-        威訊eSIM 728 台幣
-        TOYOTA租車 27,500 日幣
-        午餐 1500      (defaults to 日幣)
-        6/28 午餐 1500 日幣   (with date prefix)
-
-    Returns dict with keys: description, jpy, twd, date (or None if not parseable)
-    """
-    text = text.strip()
-    if not text:
-        return None
-
-    # Optional date prefix: "6/28 " or "6-28 " or "2026-06-28 "
-    date = None
-    date_match = re.match(
-        r"^(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2})\s+", text
-    )
-    if date_match:
-        date = date_match.group(1)
-        text = text[date_match.end():]
-
-    # Core pattern: description + amount + optional currency
-    # "午餐 1500 日幣" or "午餐 1500"
-    pattern = r"^(.+?)\s+(\d[\d,]*(?:\.\d+)?)\s*(日幣|台幣|jpy|twd|yen|ntd|日圓|台幣|円)?$"
-    m = re.match(pattern, text, re.IGNORECASE)
-    if not m:
-        return None
-
-    description = m.group(1).strip()
-    amount = float(m.group(2).replace(",", ""))
-    currency = (m.group(3) or "日幣").lower()
-
-    # Map currency aliases
-    is_jpy = currency in ("日幣", "jpy", "yen", "日圓", "円")
-
-    result = {
-        "description": description,
-        "jpy": amount if is_jpy else None,
-        "twd": amount if not is_jpy else None,
-        "date": date,
-    }
-    return result
