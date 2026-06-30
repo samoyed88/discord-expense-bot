@@ -71,7 +71,12 @@ class SheetsClient:
             card if card else "",  # F: 卡號
         ]
 
-        self.sheet.append_row(row, value_input_option="USER_ENTERED")
+        # table_range="B3" 從 B 欄開始找最後一行，A 欄是空的
+        self.sheet.append_row(
+            row,
+            value_input_option="USER_ENTERED",
+            table_range="B3",
+        )
 
         # Return the row number (last row)
         return self.sheet.row_count
