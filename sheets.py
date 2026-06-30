@@ -71,15 +71,18 @@ class SheetsClient:
             card if card else "",  # F: 卡號
         ]
 
-        # table_range="B3" 從 B 欄開始找最後一行，A 欄是空的
-        self.sheet.append_row(
-            row,
+        # 手動找 B 欄最後一行，避免 append_row 覆蓋
+        b_col = self.sheet.col_values(2)  # B 欄所有值
+        next_row = len(b_col) + 1
+
+        # 寫入到下一行
+        self.sheet.update(
+            f"A{next_row}:F{next_row}",
+            [row],
             value_input_option="USER_ENTERED",
-            table_range="B3",
         )
 
-        # Return the row number (last row)
-        return self.sheet.row_count
+        return next_row
 
     def get_all_expenses(self) -> list[dict]:
         """Get all expense rows (starting from row 3)."""
