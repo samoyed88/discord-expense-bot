@@ -10,12 +10,14 @@ import tempfile
 
 from database import Database
 from gemini_client import GeminiClient
+from sheets import SheetsClient, parse_expense_message
 
 # Load environment variables
 load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 TEST_MODE = os.getenv("TEST_MODE", "False").lower() == "true"
+EXPENSE_CHANNEL_ID = os.getenv("EXPENSE_CHANNEL_ID")
 if not DISCORD_TOKEN and not TEST_MODE:
     raise ValueError("DISCORD_TOKEN environment variable not set")
 
@@ -32,6 +34,14 @@ except ValueError:
     print("Warning: GEMINI_API_KEY not set. Image-based expense logging will not work.")
     gemini = None
 
+# Initialize Google Sheets client
+try:
+    sheets = SheetsClient()
+    print("✅ Google Sheets connected")
+except Exception as e:
+    print(f"Warning: Google Sheets not configured: {e}")
+    sheets = None
+
 
 @bot.event
 async def on_ready():
@@ -42,6 +52,50 @@ async def on_ready():
         print(f"✅ Synced {len(synced)} command(s)")
     except Exception as e:
         print(f"❌ Failed to sync commands: {e}")
+
+
+@bot.event
+async def on_message(message: discord.Message):
+    """Handle quick expense messages in the designated channel."""
+    # Ignore bot's own messages
+    if message.author == bot.user:
+        return
+
+    # Only process in the designated expense channel (if configured)
+    if EXPENSE_CHANNEL_ID and str(message.channel.id) != EXPENSE_CHANNEL_ID:
+        await bot.process_commands(message)
+        return
+
+    # Try to parse as expense message
+    parsed = parse_expense_message(message.content)
+    if not parsed:
+        await bot.process_commands(message)
+        return
+
+    if not sheets:
+        await message.reply("❌ Google Sheets 未設定，無法記帳")
+        return
+
+    try:
+        row = sheets.append_expense(
+            description=parsed["description"],
+            jpy=parsed["jpy"],
+            twd=parsed["twd"],
+            date=parsed["date"],
+        )
+
+        # Build confirmation message
+        amount_str = (
+            f"¥{parsed['jpy']:,.0f} 日幣"
+            if parsed["jpy"]
+            else f"${parsed['twd']:,.0f} 台幣"
+        )
+        date_str = parsed["date"] or datetime.now().strftime("%-m/%-d")
+        await message.reply(
+            f"✅ **{parsed['description']}** {amount_str}（{date_str}）已記錄到 Google Sheets"
+        )
+    except Exception as e:
+        await message.reply(f"❌ 寫入失敗：{str(e)}")
 
 
 # ==================== Commands ====================
