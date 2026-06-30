@@ -34,6 +34,10 @@ MANIFEST
 .env.local
 .env.*.local
 
+# Google Service Account key (NEVER commit this)
+service_account.json
+*-credentials.json
+
 # IDE
 .vscode/
 .idea/
